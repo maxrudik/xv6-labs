@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "stat.h": "c",
+        "sysinfo.h": "c",
+        "memlayout.h": "c",
+        "defs.h": "c"
+    }
+}
