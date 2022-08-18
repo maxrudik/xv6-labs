@@ -92,6 +92,8 @@ int             fork(void);
 int             growproc(int);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
+pagetable_t     proc_kpagetable(struct proc *);
+void            prok_freekpagetable(pagetable_t);
 int             kill(int);
 struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
@@ -178,7 +180,7 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
-void            vmprint(pagetable_t pagetable);
+void            vmprint(pagetable_t);
 void            print_pagetable(pagetable_t pagetable, int level);
 
 // plic.c
@@ -196,6 +198,9 @@ void            virtio_disk_intr(void);
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
 
+// vmcopyin.c
+int             copyin_new(pagetable_t, char *, uint64, uint64);
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);
 
 // stats.c
 void            statsinit(void);

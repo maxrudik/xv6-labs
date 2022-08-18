@@ -121,6 +121,19 @@ found:
     return 0;
   }
 
+  // create a kernel page copy in user process
+  p->kpagetable = proc_kpagetable(p);
+  if(p->kpagetable == 0) {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // set up kernel stack for per-process kernel pagetable
+  uint64 va = KSTACK((int) (p-proc));
+  if(mappages(p->kpagetable, va, PGSIZE, kvmpa(va), PTE_R | PTE_W) != 0) 
+    panic("prok_mapStack");
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -142,6 +155,9 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  if(p->kpagetable)
+    prok_freekpagetable(p->kpagetable);
+  p->kpagetable = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -193,6 +209,41 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
+}
+
+pagetable_t proc_kpagetable(struct proc *p) {
+  extern char etext[];
+  pagetable_t ukpgtb = uvmcreate();
+  
+  if(ukpgtb == 0) return 0;
+  if(mappages(ukpgtb, UART0, PGSIZE, UART0, PTE_R | PTE_W) != 0) 
+    panic("proc_kpagetable");
+  if(mappages(ukpgtb, VIRTIO0, PGSIZE, VIRTIO0, PTE_R | PTE_W) != 0) 
+    panic("proc_kpagetable");
+  if(mappages(ukpgtb, PLIC, 0x400000, PLIC, PTE_R | PTE_W) != 0) 
+    panic("proc_kpagetable");
+  if(mappages(ukpgtb, KERNBASE, (uint64)etext-KERNBASE, KERNBASE, PTE_R | PTE_X) != 0) 
+    panic("proc_kpagetable");
+  if(mappages(ukpgtb, (uint64)etext, PHYSTOP-(uint64)etext, (uint64)etext, PTE_R | PTE_W) != 0)
+    panic("proc_kpagetable");
+  if(mappages(ukpgtb, TRAPFRAME, PGSIZE, (uint64)(p->trapframe), PTE_R | PTE_W) < 0)
+    panic("proc_kpagetable");
+  if(mappages(ukpgtb, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X) != 0) 
+    panic("proc_kpagetable");
+  return ukpgtb;
+}
+
+void prok_freekpagetable(pagetable_t pagetable) {
+  for(int i = 0; i < 512; i++) {
+    pte_t pte = pagetable[i];
+    if(PTE_FLAGS(pte) == PTE_V) {
+      prok_freekpagetable((pagetable_t)PTE2PA(pte));
+      pagetable[i] = 0;
+    } else if(pte & PTE_V) {
+      pagetable[i] = 0;
+    }
+  }
+  kfree(pagetable);
 }
 
 // a user program that calls exec("/init")
@@ -473,6 +524,8 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        w_satp(MAKE_SATP(p->kpagetable));
+        sfence_vma();
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
@@ -480,6 +533,15 @@ scheduler(void)
         c->proc = 0;
 
         found = 1;
+        // when not running, `kernel_pagetable` should be used!
+        // the following uncommented code is short for
+        //      w_satp(MAKE_SATP(kernel_pagetable));
+        //      sfence_vma();
+        // while `kernel_pagetable` is not valid in this file.
+        // If you want to use `kernel_pagetable`, add 
+        //      extern pagetable_t kernel_pagetable
+        // properly.
+        kvminithart();
       }
       release(&p->lock);
     }
