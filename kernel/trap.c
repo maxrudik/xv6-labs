@@ -65,6 +65,20 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if((which_dev = devintr()) == 2){
+    if(p->alarm_interval){
+      p->ticks_passed++;
+
+      if(p->ticks_passed == p->alarm_interval){
+        p->ticks_passed = 0;
+        // save current registers
+        if(!p->alarm_handler_running){
+          move_trapframes(p->trapframe, p->alarm_trapframe);
+          p->trapframe->epc = p->alarm_handler;
+          p->alarm_handler_running = 1;
+        }
+      }
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

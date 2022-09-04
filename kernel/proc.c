@@ -113,6 +113,11 @@ found:
     return 0;
   }
 
+  if((p->alarm_trapframe = (struct trapframe *)kalloc()) == 0){
+    release(&p->lock);
+    return 0;
+  }
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -127,6 +132,12 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // Info for sigalarm syscall
+  p->alarm_interval = 0;
+  p->ticks_passed = 0;
+  p->alarm_handler = 0;
+  p->alarm_handler_running = 0;
+
   return p;
 }
 
@@ -139,6 +150,9 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  if(p->alarm_trapframe)
+    kfree((void*)p->alarm_trapframe);
+  p->alarm_trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -149,6 +163,10 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  p->alarm_interval = 0;
+  p->ticks_passed = 0;
+  p->alarm_handler = 0;
+  p->alarm_handler_running = 0;
   p->state = UNUSED;
 }
 
@@ -696,4 +714,42 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// Move user state registres, without modifying kernels.
+void
+move_trapframes(struct trapframe *from, struct trapframe *to)
+{
+  to->epc = from->epc;
+  to->ra = from->ra;
+  to->sp = from->sp;
+  to->gp = from->gp;
+  to->tp = from->tp;
+  to->t0 = from->t0;
+  to->t1 = from->t1;
+  to->t2 = from->t2;
+  to->s0 = from->s0;
+  to->s1 = from->s1;
+  to->a0 = from->a0;
+  to->a1 = from->a1;
+  to->a2 = from->a2;
+  to->a3 = from->a3;
+  to->a4 = from->a4;
+  to->a5 = from->a5;
+  to->a6 = from->a6;
+  to->a7 = from->a7;
+  to->s2 = from->s2;
+  to->s3 = from->s3;
+  to->s4 = from->s4;
+  to->s5 = from->s5;
+  to->s6 = from->s6;
+  to->s7 = from->s7;
+  to->s8 = from->s8;
+  to->s9 = from->s9;
+  to->s10 = from->s10;
+  to->s11 = from->s11;
+  to->t3 = from->t3;
+  to->t4 = from->t4;
+  to->t5 = from->t5;
+  to->t6 = from->t6;
 }
