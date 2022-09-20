@@ -69,7 +69,10 @@ usertrap(void)
     // ok
   } else if(r_scause() == 15 || r_scause() == 13) {
     uint64 va = r_stval();
-    printf("pagefault\n");
+    if(va > p->sz || va < p->trapframe->sp) {
+      p->killed = 1;
+      exit(1);
+    }
     uint64 ka = (uint64)kalloc();
     if(ka == 0) {
       p->killed = 1;
