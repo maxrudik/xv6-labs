@@ -14,6 +14,15 @@
 //     so do not keep them longer than necessary.
 
 
+//         (_V__V_)             (_\_(___)_/_)
+//           (oo)                   (o o)
+//    /-------\/                     \ /----------\\
+//   "| _____||                       O||        ||~
+//    ||     ||                        ||------/@||
+//    ^^     ^^                        ||        ||     
+//   Single-thread Moose               ^^        ^^
+//                                    Concurrent Moose
+
 #include "types.h"
 #include "param.h"
 #include "spinlock.h"
